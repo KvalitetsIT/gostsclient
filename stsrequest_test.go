@@ -40,7 +40,7 @@ func TestGetStsRequestSigned(t *testing.T) {
 	// Then
 	soapStr, _ := request.SoapEnvelope.WriteToString()
 	assert.NilError(t, err, "Error creating request")
-	assert.Equal(t, soapStr, soapStr)
+	assert.Equal(t, "w", soapStr)
 }
 
 

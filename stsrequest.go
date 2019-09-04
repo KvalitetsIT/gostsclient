@@ -4,6 +4,7 @@ import (
 	etree "github.com/beevik/etree"
 	"crypto"
 	"fmt"
+	"time"
 	dsig "github.com/russellhaering/goxmldsig"
 	uuid "github.com/google/uuid"
 )
@@ -129,6 +130,11 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 			actionId := fmt.Sprintf("_%s", uuid.New().String())
 			addAttributesToSignableHeaderElement(action, actionId)
 
+			messageId := header.CreateElement("adr:MessageID")
+			messageId.SetText(fmt.Sprintf("urn:uuid:%s", uuid.New().String()))
+			messageIdId := fmt.Sprintf("_%s", uuid.New().String())
+                        addAttributesToSignableHeaderElement(messageId, messageIdId)
+
 			to := header.CreateElement("adr:To")
 			to.SetText(stsUrl)
 			toId := fmt.Sprintf("_%s", uuid.New().String()) 
@@ -146,6 +152,15 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 			security.CreateAttr(namespace_wsu, uri_wsu)
                         security.CreateAttr("soap:mustUnderstand", "1")
 
+				timeStamp := security.CreateElement("wsu:Timestamp")
+				timeStampId := fmt.Sprintf("_%s", uuid.New().String())
+				timeStamp.CreateAttr(id_attr, timeStampId)
+					cr := time.Now()
+					created := timeStamp.CreateElement("wsu:Created")
+					created.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", cr.Year(), cr.Month(), cr.Day(), cr.Hour(), cr.Minute(), cr.Second()))
+					ex := cr.Add(time.Minute * 5)
+					expires := timeStamp.CreateElement("wsu:Expires")
+					expires.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d", ex.Year(), ex.Month(), ex.Day(), ex.Hour(), ex.Minute(), ex.Second()))
 
 		body := envelope.CreateElement("soap:Body")
 		bodyActionId := fmt.Sprintf("_%s", uuid.New().String())
@@ -180,7 +195,7 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 				useKey.AddChild(keyInfoElement)
 
-	return doc, security, body, []*etree.Element{ action, to, replyTo }
+	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo }
 }
 
 func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
