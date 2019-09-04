@@ -18,7 +18,7 @@ type StsClient struct {
 	issueUrl		string
 }
 
-func NewStsClient(keyPair *tls.Certificate, issueUrl string) (*StsClient, error) {
+func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl string) (*StsClient, error) {
 
 	keyStore := dsig.TLSCertKeyStore(*keyPair)
 	stsRequestFactory, err := NewStsRequestFactory(keyStore)
@@ -28,7 +28,7 @@ func NewStsClient(keyPair *tls.Certificate, issueUrl string) (*StsClient, error)
 
 	// Setup HTTPS client
 	caCertPool := x509.NewCertPool()
-	//caCertPool.AppendCertsFromPEM(caCert)
+	caCertPool.AddCert(trust)
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{ *keyPair },
 		RootCAs:      caCertPool,
@@ -56,7 +56,7 @@ func (s StsClient) GetToken() (*StsResponse, error) {
         }
 
 	issueRequest, err := http.NewRequest("POST", s.issueUrl, bytes.NewBuffer([]byte(soapStr)))
-	issueRequest.Header.Set("SOAPAction=", "http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
+	issueRequest.Header.Set("SOAPAction", "http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
 	if (err != nil) {
                 return nil, err
         }

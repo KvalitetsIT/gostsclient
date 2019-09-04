@@ -3,26 +3,32 @@ package stsclient
 import (
 	"testing"
 	"crypto/tls"
+	"crypto/x509"
 
 	"gotest.tools/assert"
-//	"encoding/pem"
+	"encoding/pem"
+
 //        "github.com/russellhaering/gosaml2/types"
 
- //	"gotest.tools/assert"
 //  	"github.com/russellhaering/goxmldsig"
-//	"io/ioutil"
+	"io/ioutil"
 )
 
 func TestGetToken(t *testing.T) {
 
 	// Given
+	stsCert, _ := ioutil.ReadFile("./testdata/sts_test-vdxapi_vconf_dk.crt")
+      	stsBlock, _ := pem.Decode([]byte(stsCert))
+    	stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
+
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-	subject, _ := NewStsClient(&clientKeyPair, "https://sts.test-vdxapi.vconf.dk/sts/service/sts")
+	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts.test-vdxapi.vconf.dk/sts/service/sts")
 
 	// When
-	assertion, err :=subject.GetToken()
+	response, err := subject.GetToken()
+
 	assert.NilError(t, err)
-        assert.Equal(t, "2.0", assertion)
+        assert.Equal(t, "2.0", response.ToString())
 
 
 

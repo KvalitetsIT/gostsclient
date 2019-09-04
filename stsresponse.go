@@ -14,3 +14,7 @@ func ParseStsResponse(responsePayload []byte) (*StsResponse) {
 
 	return stsResponse
 }
+
+func (resp *StsResponse) ToString() string {
+	return string(resp.payload)
+}
