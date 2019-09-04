@@ -72,8 +72,7 @@ func getKeyInfoElementFromKeyStore(keyStore dsig.TLSCertKeyStore) (*etree.Elemen
 
 	keyInfo := doc.FindElementPath(keyInfoPath)
 	if (keyInfo == nil) {
-		// TODO lav error
-		panic("keyinfo not found")
+		panic("Keyinfo not found")
 	}
 	docResult := etree.NewDocument()
 	docResult.SetRoot(keyInfo)
@@ -175,34 +174,13 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
 
-//        ctx := dsig.NewDefaultSigningContext(factory.keyStore)
         ctx := &dsig.SigningContext{
                 Hash:          crypto.SHA256,
                 KeyStore:      factory.keyStore,
-                IdAttribute:   id_attr,//"wsu:Id",
+                IdAttribute:   id_attr,
                 Prefix:        dsig.DefaultPrefix,
                 Canonicalizer: dsig.MakeC14N11Canonicalizer(),
         }
-
-  /*      contents, _ := ctx.Canonicalizer.Canonicalize(body)
-        doc := etree.NewDocument()
-        if err := doc.ReadFromBytes(contents); err != nil {
-                panic(err)
-        }
-	return doc, nil
-*/
-
-/*	bodyPath, err := etree.CompilePath("./soap:Envelope/soap:Body")
-	if (err != nil) {
-		panic(err)
-	}
-        bodyElement := doc.FindElementPath(bodyPath)*/
-
-//	actionPath, err := etree.CompilePath("./soap:Envelope/soap:Header/Action")
-//	if (err != nil) {
-//		panic(err)
-//	}
-//	actionElement := doc.FindElementPath(actionPath)
 
 	sig, err := ctx.ConstructSignature(append(headersToSign, body), false)
 	if (err != nil) {
