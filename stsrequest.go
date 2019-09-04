@@ -111,6 +111,10 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 
 	envelope := doc.CreateElement("soap:Envelope")
+        //envelope.CreateAttr(namespace_ds, uri_ds)
+        //security.CreateAttr(namespace_wsse, uri_wsse)
+         //               security.CreateAttr(namespace_wsu, uri_wsu)
+
 	envelope.CreateAttr(namespace_soap, uri_soap)
 
 		header := envelope.CreateElement("soap:Header")
@@ -182,13 +186,12 @@ func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, secu
                 Canonicalizer: dsig.MakeC14N11Canonicalizer(),
         }
 
-	sig, err := ctx.ConstructSignature(append(headersToSign, body), false)
+	signature, err := ctx.ConstructSignature(append(headersToSign, body), false)
 	if (err != nil) {
-		panic(err)
+		return nil, err
 	}
 
-	security.AddChild(sig)
+	security.AddChild(signature)
 
 	return document, err
 }
-

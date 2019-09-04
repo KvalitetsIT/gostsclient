@@ -2,6 +2,7 @@ package stsclient
 
 import (
 	"testing"
+	"crypto"
 	"crypto/tls"
 //	"encoding/pem"
 //        "github.com/russellhaering/gosaml2/types"
@@ -9,6 +10,8 @@ import (
 //	"fmt"
  	"gotest.tools/assert"
   	dsig "github.com/russellhaering/goxmldsig"
+	etree "github.com/beevik/etree"
+
 //	"io/ioutil"
 )
 
@@ -53,7 +56,6 @@ func TestGetStsRequestSigned(t *testing.T) {
         keyStore := dsig.TLSCertKeyStore(clientKeyPair)
         subject, _ := NewStsRequestFactory(keyStore)
 
-
         // When
         request, err := subject.CreateStsRequest(true)
 
@@ -66,9 +68,60 @@ func TestGetStsRequestSigned(t *testing.T) {
 }
 
 
+func TestSignEnveloped(t *testing.T) {
+
+	keyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+        keyStore := dsig.TLSCertKeyStore(keyPair)
+
+        doc := etree.NewDocument()
+        doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
+        envelope := doc.CreateElement("Envelope")
+      	envelope.CreateElement("Header")
+	body := envelope.CreateElement("Body")
+	body.CreateAttr("ID", "_id9837432984298")
+
+       	ctx := &dsig.SigningContext{
+                Hash:          crypto.SHA256,
+                KeyStore:      keyStore,
+                IdAttribute:   "ID",
+                Prefix:        dsig.DefaultPrefix,
+                Canonicalizer: dsig.MakeC14N11Canonicalizer(),
+        }
+	signed, _ := ctx.SignEnveloped(body)
+
+	newDoc := etree.NewDocument()
+        newDoc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
+        newEnvelope := newDoc.CreateElement("Envelope")
+        newEnvelope.CreateElement("Header")
+	newEnvelope.AddChild(signed)
+
+	newDoc.WriteToString()
+}
 
 
-// Testcase med forkert udsteder
+func TestConstructSignature(t *testing.T) {
 
-// Testcase
+        keyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+        keyStore := dsig.TLSCertKeyStore(keyPair)
 
+        doc := etree.NewDocument()
+        doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
+        envelope := doc.CreateElement("Envelope")
+        header := envelope.CreateElement("Header")
+        body := envelope.CreateElement("Body")
+        body.CreateAttr("ID", "_id9837432984298")
+
+        ctx := &dsig.SigningContext{
+                Hash:          crypto.SHA256,
+                KeyStore:      keyStore,
+                IdAttribute:   "ID",
+                Prefix:        dsig.DefaultPrefix,
+                Canonicalizer: dsig.MakeC14N11Canonicalizer(),
+        }
+
+	signed, _ := ctx.ConstructSignature([]*etree.Element { body }, false)
+	header.AddChild(signed)
+
+        //str, _  := doc.WriteToString()
+	//assert.Equal(t, "1.0", str)
+}
