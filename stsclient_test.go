@@ -3,6 +3,8 @@ package stsclient
 import (
 	"testing"
 	"crypto/tls"
+
+	"gotest.tools/assert"
 //	"encoding/pem"
 //        "github.com/russellhaering/gosaml2/types"
 
@@ -17,14 +19,10 @@ func TestGetToken(t *testing.T) {
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
 	subject, _ := NewStsClient(&clientKeyPair, "https://sts.test-vdxapi.vconf.dk/sts/service/sts")
 
-
-//	clientKeyPair, err := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-//	assert.NilError(t, err)
-//	subject := NewStsClient(&clientKeyPair)
-
-
 	// When
-	subject.GetToken()
+	assertion, err :=subject.GetToken()
+	assert.NilError(t, err)
+        assert.Equal(t, "2.0", assertion)
 
 
 

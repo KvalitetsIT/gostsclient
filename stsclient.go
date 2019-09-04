@@ -1,19 +1,12 @@
 package stsclient
 
 import (
-	"fmt"
 	"bytes"
-//	"io"
 	"io/ioutil"
 	"net/http"
-//	"encoding/xml"
-//	"encoding/base64"
 	"crypto/tls"
 	"crypto/x509"
-	saml2 "github.com/russellhaering/gosaml2/types"
 	dsig "github.com/russellhaering/goxmldsig"
-//	"github.com/russellhaering/goxmldsig/types"
-//	"github.com/beevik/etree"
 )
 
 type StsClient struct {
@@ -48,7 +41,7 @@ func NewStsClient(keyPair *tls.Certificate, issueUrl string) (*StsClient, error)
 	return &stsClient, nil
 }
 
-func (s StsClient) GetToken() (*saml2.Assertion, error) {
+func (s StsClient) GetToken() (*StsResponse, error) {
 
 
 	// Create the SOAP request
@@ -75,7 +68,5 @@ func (s StsClient) GetToken() (*saml2.Assertion, error) {
 	defer issueResp.Body.Close()
 	body, err := ioutil.ReadAll(issueResp.Body)
 
-        fmt.Println(body)
-
-	return nil, nil
+	return ParseStsResponse(body), nil
 }

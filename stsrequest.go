@@ -98,24 +98,28 @@ func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, erro
 }
 
 func addAttributesToSignableHeaderElement(headerElement *etree.Element, id string) {
+
 	headerElement.CreateAttr(namespace_adr, uri_adr)
+        headerElement.CreateAttr(namespace_ds, uri_ds)
         headerElement.CreateAttr(namespace_soap, uri_soap)
+        headerElement.CreateAttr(namespace_wsse, uri_wsse)
         headerElement.CreateAttr(namespace_wsu, uri_wsu)
         headerElement.CreateAttr(id_attr, id)
 }
 
-
+// Det virker somom, at signeringen er meget følsom overfor namespace definitioner (noget med canonization), hvis du laver om i nedenstående, så test, at output kan
+// verificeres på https://tools.chilkat.io/xmlDsigVerify.cshtml (ret tests til, så du får output)
 func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToAddress string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element) {
 
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 
 	envelope := doc.CreateElement("soap:Envelope")
-        //envelope.CreateAttr(namespace_ds, uri_ds)
-        //security.CreateAttr(namespace_wsse, uri_wsse)
-         //               security.CreateAttr(namespace_wsu, uri_wsu)
-
+	envelope.CreateAttr(namespace_adr, uri_adr)
+        envelope.CreateAttr(namespace_ds, uri_ds)
 	envelope.CreateAttr(namespace_soap, uri_soap)
+        envelope.CreateAttr(namespace_wsse, uri_wsse)
+        envelope.CreateAttr(namespace_wsu, uri_wsu)
 
 		header := envelope.CreateElement("soap:Header")
 		header.CreateAttr(namespace_soap, uri_soap)
@@ -144,9 +148,12 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 
 		body := envelope.CreateElement("soap:Body")
-		bodyActionId := fmt.Sprintf("_%s", uuid.New().String()) 
-		body.CreateAttr(namespace_wsu, uri_wsu)
-		body.CreateAttr(namespace_soap, uri_soap)
+		bodyActionId := fmt.Sprintf("_%s", uuid.New().String())
+		body.CreateAttr(namespace_adr, uri_adr)
+		body.CreateAttr(namespace_ds, uri_ds)
+        	body.CreateAttr(namespace_soap, uri_soap)
+        	body.CreateAttr(namespace_wsse, uri_wsse)
+        	body.CreateAttr(namespace_wsu, uri_wsu)
 		body.CreateAttr(id_attr, bodyActionId)
 
 			requestSecurityToken := body.CreateElement("wst:RequestSecurityToken")

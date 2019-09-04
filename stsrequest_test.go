@@ -4,15 +4,9 @@ import (
 	"testing"
 	"crypto"
 	"crypto/tls"
-//	"encoding/pem"
-//        "github.com/russellhaering/gosaml2/types"
-
-//	"fmt"
  	"gotest.tools/assert"
   	dsig "github.com/russellhaering/goxmldsig"
 	etree "github.com/beevik/etree"
-
-//	"io/ioutil"
 )
 
 func TestGetStsRequestNoSignature(t *testing.T) {
