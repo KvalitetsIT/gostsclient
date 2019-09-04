@@ -14,5 +14,8 @@ RUN go get github.com/russellhaering/goxmldsig
 
 # Kitcaddy module source
 COPY . /stsclient/
+#RUN env
+#RUN mv chilkat /go/chilkat
+#RUN mv /stsclient/linux-x64-gcc /chilkatc
 RUN go test stsclient
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/securityprotocol .
+RUN CGO_ENABLED=0 GOOS=linux  go build -L/chilkatc/linux-x64-gcc -lchilkatext-9.5.0 -lresolv -lpthread -lstdc++  -a -installsuffix cgo -o /go/bin/securityprotocol .

@@ -87,6 +87,13 @@ func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, erro
 	return &stsRequest, nil
 }
 
+func addAttributesToSignableHeaderElement(headerElement *etree.Element, id string) {
+	headerElement.CreateAttr("xmlns:adr", "http://www.w3.org/2005/08/addressing")
+        headerElement.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
+        headerElement.CreateAttr(namespace_wsu, uri_wsu)
+        headerElement.CreateAttr(id_attr, id)
+}
+
 
 func createIssueRequest(keyInfoElement *etree.Element) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element) {
 
@@ -97,136 +104,41 @@ func createIssueRequest(keyInfoElement *etree.Element) (*etree.Document, *etree.
 	envelope.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
 
 		header := envelope.CreateElement("soap:Header")
+		header.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
 
 			action := header.CreateElement("adr:Action")
-			actionId := "_2451b4b1-38d6-4395-9a28-372560725c59" //TODO generer
-			action.CreateAttr("xmlns:adr", "http://www.w3.org/2005/08/addressing")
-			action.CreateAttr(namespace_wsu, uri_wsu)
-			action.CreateAttr(id_attr, actionId)
 			action.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
+			actionId := "_2451b4b1-38d6-4395-9a28-372560725c59" //TODO generer
+			addAttributesToSignableHeaderElement(action, actionId)
+
+ 			replyTo := header.CreateElement("adr:ReplyTo")
+				replyToAddress := replyTo.CreateElement("adr:Address")
+				replyToAddress.SetText("http://www.w3.org/2005/08/addressing/anonymous")
+			replyToId := "_1231b4b1-38d6-4395-9a28-372560725cee" //TODO generer
+			addAttributesToSignableHeaderElement(replyTo, replyToId)
 
 			security := header.CreateElement("wsse:Security")
-			security.CreateAttr(namespace_wsse, uri_wsse)
-			//security.CreateAttr(namespace_wsu, uri_wsu)
-			security.CreateAttr("soap:mustUnderstand", "1")
+			security.CreateAttr(namespace_ds, uri_ds)
+                        security.CreateAttr(namespace_wsse, uri_wsse)
+			security.CreateAttr(namespace_wsu, uri_wsu)
+                        security.CreateAttr("soap:mustUnderstand", "1")
+
 
 		body := envelope.CreateElement("soap:Body")
-//		body.CreateAttr(namespace_ds, uri_ds)
-//		body.CreateAttr(namespace_wst, uri_wst)
-		body.CreateAttr(namespace_wsu, uri_wsu)
-
 		bodyActionId := "_a7dd77e4-586d-47b5-9b83-2ed20ff0441" // TODO generer
+		body.CreateAttr(namespace_wsu, uri_wsu)
+		body.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
 		body.CreateAttr(id_attr, bodyActionId)
 
 			requestSecurityToken := body.CreateElement("wst:RequestSecurityToken")
-			requestSecurityToken.CreateAttr(namespace_ds, uri_ds)
 			requestSecurityToken.CreateAttr(namespace_wst, uri_wst)
 
 				useKey := requestSecurityToken.CreateElement("wst:UseKey")
+				useKey.CreateAttr(namespace_ds, uri_ds)
 
 				useKey.AddChild(keyInfoElement)
 
-	return doc, security, body, []*etree.Element{ action }
-}
-
-
-func (factory StsRequestFactory) signSoapRequest2(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
-        ctx := dsig.NewDefaultSigningContext(factory.keyStore)
-        contents, _ := ctx.Canonicalizer.Canonicalize(document.Root())
-
-	doc := etree.NewDocument()
-	if err := doc.ReadFromBytes(contents); err != nil {
-		    	panic(err)
-	}
-
-	bodyPath, err := etree.CompilePath("/soap:Envelope/soap:Body")
-	body = doc.FindElementPath(bodyPath)
-	if (body == nil) {
-                panic("body element not found")
-        }
-
-
-	securityPath, err := etree.CompilePath("/soap:Envelope/soap:Header/wsse:Security")
-        security = doc.FindElementPath(securityPath)
-        if (security == nil) {
-                panic("security element not found")
-        }
-
-
-        // Start by signing the body and creating the Signature element under the Security node of the request
-        signedBody, err := ctx.ConstructSignature([]*etree.Element { body }, false)
-        if (err != nil) {
-                return nil, err
-        }
-
-        security.AddChild(signedBody)
-
-        signedInfoPath, err := etree.CompilePath("/soap:Envelope/soap:Header/wsse:Security/ds:Signature/ds:SignedInfo")
-        signedInfoElement := doc.FindElementPath(signedInfoPath)
-        if (signedInfoElement == nil) {
-                panic("element not found")
-        }
-
-
-	return doc, nil
-        // Append each of the Request elements containing the header digests to the Signature element
-        for _, header := range headersToSign {
-
-                signedHeader, _ := ctx.ConstructSignature([]*etree.Element { header }, false)
-                doc := etree.NewDocument()
-                doc.SetRoot(signedHeader)
-
-                referencePath, _ := etree.CompilePath("./ds:Signature/ds:SignedInfo/ds:Reference")
-                referenceElement := doc.FindElementPath(referencePath)
-                if (referenceElement == nil) {
-                        panic("element not found2")
-                }
-
-                signedInfoElement.AddChild(referenceElement)
-        }
-/*
-        // TODO: Create the signature based on all of the digests*/
-        return doc, nil
-}
-
-
-
-
-func (factory StsRequestFactory) signSoapRequest(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
-
-        ctx := dsig.NewDefaultSigningContext(factory.keyStore)
-
-        // Start by signing the body and creating the Signature element under the Security node of the request
-        signedBody, err := ctx.ConstructSignature([]*etree.Element { body }, false)
-	if (err != nil) {
-		return nil, err
-	}
-        security.AddChild(signedBody)
-
-        signedInfoPath, err := etree.CompilePath("/soap:Envelope/soap:Header/wsse:Security/ds:Signature/ds:SignedInfo")
-        signedInfoElement := document.FindElementPath(signedInfoPath)
-        if (signedInfoElement == nil) {
-                panic("element not found")
-        }
-
-        // Append each of the Request elements containing the header digests to the Signature element
-/*        for _, header := range headersToSign {
-
-                signedHeader, _ := ctx.ConstructSignature(header, false)
-                doc := etree.NewDocument()
-                doc.SetRoot(signedHeader)
-
-                referencePath, _ := etree.CompilePath("./ds:Signature/ds:SignedInfo/ds:Reference")
-                referenceElement := doc.FindElementPath(referencePath)
-                if (referenceElement == nil) {
-                        panic("element not found2")
-                }
-
-                signedInfoElement.AddChild(referenceElement)
-        }*/
-
-        // TODO: Create the signature based on all of the digests
-	return document, nil
+	return doc, security, body, []*etree.Element{ action, replyTo }
 }
 
 func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
@@ -240,43 +152,33 @@ func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, secu
                 Canonicalizer: dsig.MakeC14N11Canonicalizer(),
         }
 
-        contents, _ := ctx.Canonicalizer.Canonicalize(document.Root())
+  /*      contents, _ := ctx.Canonicalizer.Canonicalize(body)
         doc := etree.NewDocument()
         if err := doc.ReadFromBytes(contents); err != nil {
                 panic(err)
         }
+	return doc, nil
+*/
 
-	bodyPath, err := etree.CompilePath("./soap:Envelope/soap:Body")
+/*	bodyPath, err := etree.CompilePath("./soap:Envelope/soap:Body")
 	if (err != nil) {
 		panic(err)
 	}
-        bodyElement := doc.FindElementPath(bodyPath)
+        bodyElement := doc.FindElementPath(bodyPath)*/
 
-	actionPath, err := etree.CompilePath("./soap:Envelope/soap:Header/Action")
+//	actionPath, err := etree.CompilePath("./soap:Envelope/soap:Header/Action")
+//	if (err != nil) {
+//		panic(err)
+//	}
+//	actionElement := doc.FindElementPath(actionPath)
+
+	sig, err := ctx.ConstructSignature(append(headersToSign, body), false)
 	if (err != nil) {
 		panic(err)
 	}
-	actionElement := doc.FindElementPath(actionPath)
 
-	sig, err := ctx.ConstructSignature([]*etree.Element { bodyElement, actionElement }, false)
-	if (err != nil) {
-		panic(err)
-	}
+	security.AddChild(sig)
 
-//        ret := bodyElement.Copy()
-	ret := document.Root().Copy()
-	//ret.Child = append(ret.Child, sig)
-	docNew := etree.NewDocument()
-	docNew.SetRoot(ret)
-//	docNew.Root = ret;
-
-//	return docNew, nil
-
-        securityPath, err := etree.CompilePath("./soap:Envelope/soap:Header/wsse:Security")
-        securityElement := docNew.FindElementPath(securityPath)
-
-	securityElement.AddChild(sig)
-
-	return docNew, err
+	return document, err
 }
 
