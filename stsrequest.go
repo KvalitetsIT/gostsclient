@@ -3,7 +3,9 @@ package stsclient
 import (
 	etree "github.com/beevik/etree"
 	"crypto"
+	"fmt"
 	dsig "github.com/russellhaering/goxmldsig"
+	uuid "github.com/google/uuid"
 )
 
 const id_attr			= "wsu:Id"
@@ -117,18 +119,18 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 			action := header.CreateElement("adr:Action")
 			action.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
-			actionId := "_2451b4b1-38d6-4395-9a28-372560725c59" //TODO generer
+			actionId := fmt.Sprintf("_%s", uuid.New().String())
 			addAttributesToSignableHeaderElement(action, actionId)
 
 			to := header.CreateElement("adr:To")
 			to.SetText(stsUrl)
-			toId := "_abc1b4b1-38d6-4395-9a28-372560721234" //TODO generer
+			toId := fmt.Sprintf("_%s", uuid.New().String()) 
 			addAttributesToSignableHeaderElement(to, toId)
 
  			replyTo := header.CreateElement("adr:ReplyTo")
 				replyToAddress := replyTo.CreateElement("adr:Address")
 				replyToAddress.SetText("http://www.w3.org/2005/08/addressing/anonymous")
-			replyToId := "_1231b4b1-38d6-4395-9a28-372560725cee" //TODO generer
+			replyToId := fmt.Sprintf("_%s", uuid.New().String()) 
 			addAttributesToSignableHeaderElement(replyTo, replyToId)
 
 			security := header.CreateElement("wsse:Security")
@@ -139,7 +141,7 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 
 		body := envelope.CreateElement("soap:Body")
-		bodyActionId := "_a7dd77e4-586d-47b5-9b83-2ed20ff0441" // TODO generer
+		bodyActionId := fmt.Sprintf("_%s", uuid.New().String()) 
 		body.CreateAttr(namespace_wsu, uri_wsu)
 		body.CreateAttr(namespace_soap, uri_soap)
 		body.CreateAttr(id_attr, bodyActionId)
