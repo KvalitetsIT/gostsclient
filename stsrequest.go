@@ -7,14 +7,20 @@ import (
 )
 
 const id_attr			= "wsu:Id"
+const namespace_adr		= "xmlns:adr"
 const namespace_ds		= "xmlns:ds"
+const namespace_soap		= "xmlns:soap"
 const namespace_wsu		= "xmlns:wsu"
 const namespace_wst		= "xmlns:wst"
 const namespace_wsse		= "xmlns:wsse"
+const namespace_wsp		= "xmlns:wsp"
+const uri_adr			= "http://www.w3.org/2005/08/addressing"
 const uri_ds			= "http://www.w3.org/2000/09/xmldsig#"
+const uri_soap			= "http://schemas.xmlsoap.org/soap/envelope"
 const uri_wsu 			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
 const uri_wst			= "http://docs.oasis-open.org/ws-sx/ws-trust/200512"
 const uri_wsse			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+const uri_wsp			= "http://www.w3.org/ns/ws-policy"
 
 type StsRequest struct {
 
@@ -25,6 +31,9 @@ type StsRequestFactory struct {
 
 	keyInfoElement		*etree.Element
 	keyStore		dsig.TLSCertKeyStore
+
+	stsUrl			string
+	appliesToAddress	string
 }
 
 func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore) (*StsRequestFactory, error) {
@@ -34,7 +43,7 @@ func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore) (*StsRequestFactory, er
 		return nil, err
 	}
 
-	stsRequestFactory := StsRequestFactory{ keyInfoElement: keyInfoElement, keyStore: keyStore }
+	stsRequestFactory := StsRequestFactory{ keyInfoElement: keyInfoElement, keyStore: keyStore, stsUrl: "https://sts.test-vdxapi.vconf.dk/sts/service/sts", appliesToAddress: "urn:medcom:videoapi" }
 
 	return &stsRequestFactory, nil
 }
@@ -73,7 +82,7 @@ func getKeyInfoElementFromKeyStore(keyStore dsig.TLSCertKeyStore) (*etree.Elemen
 
 func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, error) {
 
-	soapEnvelope, securityElement, soapBody, headersToSign := createIssueRequest(factory.keyInfoElement)
+	soapEnvelope, securityElement, soapBody, headersToSign := createIssueRequest(factory.keyInfoElement, factory.stsUrl, factory.appliesToAddress)
 
 	if (sign) {
 		signedEnvelope, err := factory.signSoapRequest3(soapEnvelope, securityElement, soapBody, headersToSign)
@@ -88,28 +97,33 @@ func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, erro
 }
 
 func addAttributesToSignableHeaderElement(headerElement *etree.Element, id string) {
-	headerElement.CreateAttr("xmlns:adr", "http://www.w3.org/2005/08/addressing")
-        headerElement.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
+	headerElement.CreateAttr(namespace_adr, uri_adr)
+        headerElement.CreateAttr(namespace_soap, uri_soap)
         headerElement.CreateAttr(namespace_wsu, uri_wsu)
         headerElement.CreateAttr(id_attr, id)
 }
 
 
-func createIssueRequest(keyInfoElement *etree.Element) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element) {
+func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToAddress string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element) {
 
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 
 	envelope := doc.CreateElement("soap:Envelope")
-	envelope.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
+	envelope.CreateAttr(namespace_soap, uri_soap)
 
 		header := envelope.CreateElement("soap:Header")
-		header.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
+		header.CreateAttr(namespace_soap, uri_soap)
 
 			action := header.CreateElement("adr:Action")
 			action.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
 			actionId := "_2451b4b1-38d6-4395-9a28-372560725c59" //TODO generer
 			addAttributesToSignableHeaderElement(action, actionId)
+
+			to := header.CreateElement("adr:To")
+			to.SetText(stsUrl)
+			toId := "_abc1b4b1-38d6-4395-9a28-372560721234" //TODO generer
+			addAttributesToSignableHeaderElement(to, toId)
 
  			replyTo := header.CreateElement("adr:ReplyTo")
 				replyToAddress := replyTo.CreateElement("adr:Address")
@@ -127,18 +141,34 @@ func createIssueRequest(keyInfoElement *etree.Element) (*etree.Document, *etree.
 		body := envelope.CreateElement("soap:Body")
 		bodyActionId := "_a7dd77e4-586d-47b5-9b83-2ed20ff0441" // TODO generer
 		body.CreateAttr(namespace_wsu, uri_wsu)
-		body.CreateAttr("xmlns:soap", "http://schemas.xmlsoap.org/soap/envelope")
+		body.CreateAttr(namespace_soap, uri_soap)
 		body.CreateAttr(id_attr, bodyActionId)
 
 			requestSecurityToken := body.CreateElement("wst:RequestSecurityToken")
 			requestSecurityToken.CreateAttr(namespace_wst, uri_wst)
+
+				requestType := requestSecurityToken.CreateElement("wst:RequestType")
+				requestType.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/Issue")
+
+				appliesTo := requestSecurityToken.CreateElement("wsp:AppliesTo")
+				appliesTo.CreateAttr(namespace_wsp, uri_wsp)
+					endpointRef := appliesTo.CreateElement("adr:EndpointReference")
+					endpointRef.CreateAttr(namespace_adr, uri_adr)
+						address := endpointRef.CreateElement("adr:Address")
+						address.SetText(appliesToAddress)
+
+				tokenType := requestSecurityToken.CreateElement("wst:TokenType")
+				tokenType.SetText("http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0")
+
+				keyType := requestSecurityToken.CreateElement("wst:KeyType")
+				keyType.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/PublicKey")
 
 				useKey := requestSecurityToken.CreateElement("wst:UseKey")
 				useKey.CreateAttr(namespace_ds, uri_ds)
 
 				useKey.AddChild(keyInfoElement)
 
-	return doc, security, body, []*etree.Element{ action, replyTo }
+	return doc, security, body, []*etree.Element{ action, to, replyTo }
 }
 
 func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
