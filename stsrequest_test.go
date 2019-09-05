@@ -4,6 +4,8 @@ import (
 	"testing"
 	"crypto"
 	"crypto/tls"
+//	"crypto/x509"
+	"encoding/base64"
  	"gotest.tools/assert"
   	dsig "github.com/russellhaering/goxmldsig"
 	etree "github.com/beevik/etree"
@@ -43,6 +45,22 @@ func TestGetStsRequestSigned(t *testing.T) {
 	assert.Equal(t, "w", soapStr)
 }
 
+///////////////////////////////////////////////
+//
+// Ikke rigtige tests, men diverse kodestumper
+//
+///////////////////////////////////////////////
+func TestFormatCert(t *testing.T) {
+
+        // Given
+        tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+
+	//clientPubBytes := x509.MarshalPKCS1PublicKey(clientKeyPair.PrivateKey.PublicKey())
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(""))
+
+	assert.Equal(t, "modulus", encoded)
+}
 
 func TestSignEnveloped(t *testing.T) {
 
@@ -74,7 +92,6 @@ func TestSignEnveloped(t *testing.T) {
 	newDoc.WriteToString()
 }
 
-
 func TestConstructSignature(t *testing.T) {
 
         keyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
@@ -98,6 +115,6 @@ func TestConstructSignature(t *testing.T) {
 	signed, _ := ctx.ConstructSignature([]*etree.Element { body }, false)
 	header.AddChild(signed)
 
-        //str, _  := doc.WriteToString()
-	//assert.Equal(t, "1.0", str)
+        str, _  := doc.WriteToString()
+	assert.Equal(t, str, str)
 }

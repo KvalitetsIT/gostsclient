@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"time"
+	"encoding/base64"
 	dsig "github.com/russellhaering/goxmldsig"
 	uuid "github.com/google/uuid"
 )
@@ -84,10 +85,15 @@ func getKeyInfoElementFromKeyStore(keyStore dsig.TLSCertKeyStore) (*etree.Elemen
 
 func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, error) {
 
-	soapEnvelope, securityElement, soapBody, headersToSign := createIssueRequest(factory.keyInfoElement, factory.stsUrl, factory.appliesToAddress)
+	_, cert, err := factory.keyStore.GetKeyPair()
+	if (err != nil) {
+		return nil, err
+	}
+
+	soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator := createIssueRequest(factory.keyInfoElement, factory.stsUrl, factory.appliesToAddress, cert)
 
 	if (sign) {
-		signedEnvelope, err := factory.signSoapRequest3(soapEnvelope, securityElement, soapBody, headersToSign)
+		signedEnvelope, err := factory.signSoapRequest3(soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator)
 		if (err != nil) {
 			return nil, err
 		}
@@ -110,7 +116,7 @@ func addAttributesToSignableHeaderElement(headerElement *etree.Element, id strin
 
 // Det virker somom, at signeringen er meget følsom overfor namespace definitioner (noget med canonization), hvis du laver om i nedenstående, så test, at output kan
 // verificeres på https://tools.chilkat.io/xmlDsigVerify.cshtml (ret tests til, så du får output)
-func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToAddress string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element) {
+func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToAddress string, cert []byte) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element, func(*etree.Element)) {
 
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -153,7 +159,7 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
                         security.CreateAttr("soap:mustUnderstand", "1")
 
 				timeStamp := security.CreateElement("wsu:Timestamp")
-				timeStampId := fmt.Sprintf("_%s", uuid.New().String())
+				timeStampId := fmt.Sprintf("TS-%s", uuid.New().String())
 				timeStamp.CreateAttr(id_attr, timeStampId)
 					//loc, _ := time.LoadLocation("Europe/Copenhagen")
 					cr := time.Now().Add(time.Minute * -2)
@@ -163,14 +169,29 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 					expires := timeStamp.CreateElement("wsu:Expires")
 					expires.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.000Z", ex.Year(), ex.Month(), ex.Day(), ex.Hour(), ex.Minute(), ex.Second()))
 
+				binarySecurityTokenValue := base64.StdEncoding.EncodeToString(cert)
+				binarySecurityToken := security.CreateElement("wsse:BinarySecurityToken")
+				binarySecurityTokenId := fmt.Sprintf("X509-%s", uuid.New().String()) 
+				binarySecurityToken.CreateAttr(id_attr, binarySecurityTokenId)
+				binarySecurityToken.CreateAttr("EncodingType", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary")
+				binarySecurityToken.CreateAttr("ValueType", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3")
+				binarySecurityToken.SetText(binarySecurityTokenValue)
+
+				keyInfoDecorator := func(keyInfo *etree.Element) {
+					secTokenRef := keyInfo.CreateElement("wsse:SecurityTokenReference")
+						reference := secTokenRef.CreateElement("wsse:Reference")
+						reference.CreateAttr("URI", fmt.Sprintf("#%s", binarySecurityTokenId))
+						reference.CreateAttr("ValueType", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3")
+				}
+
 		body := envelope.CreateElement("soap:Body")
-		bodyActionId := fmt.Sprintf("_%s", uuid.New().String())
+		bodyId := fmt.Sprintf("_%s", uuid.New().String())
 		body.CreateAttr(namespace_adr, uri_adr)
 		body.CreateAttr(namespace_ds, uri_ds)
         	body.CreateAttr(namespace_soap, uri_soap)
         	body.CreateAttr(namespace_wsse, uri_wsse)
         	body.CreateAttr(namespace_wsu, uri_wsu)
-		body.CreateAttr(id_attr, bodyActionId)
+		body.CreateAttr(id_attr, bodyId)
 
 			requestSecurityToken := body.CreateElement("wst:RequestSecurityToken")
 			requestSecurityToken.CreateAttr(namespace_wst, uri_wst)
@@ -196,10 +217,10 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 				useKey.AddChild(keyInfoElement)
 
-	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo }
+	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo }, keyInfoDecorator
 }
 
-func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element) (*etree.Document, error) {
+func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element, keyInfoDecorator func(*etree.Element)) (*etree.Document, error) {
 
         ctx := &dsig.SigningContext{
                 Hash:          crypto.SHA256,
@@ -209,7 +230,7 @@ func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, secu
                 Canonicalizer: dsig.MakeC14N11Canonicalizer(),
         }
 
-	signature, err := ctx.ConstructSignature(append(headersToSign, body), false)
+	signature, err := ctx.ConstructSignatureRef(append(headersToSign, body), keyInfoDecorator, false)
 	if (err != nil) {
 		return nil, err
 	}
