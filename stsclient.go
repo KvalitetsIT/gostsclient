@@ -21,7 +21,7 @@ type StsClient struct {
 func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl string) (*StsClient, error) {
 
 	keyStore := dsig.TLSCertKeyStore(*keyPair)
-	stsRequestFactory, err := NewStsRequestFactory(keyStore)
+	stsRequestFactory, err := NewStsRequestFactory(keyStore, issueUrl)
 	if (err != nil) {
 		return nil, err
 	}
@@ -32,6 +32,7 @@ func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl st
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{ *keyPair },
 		RootCAs:      caCertPool,
+//		InsecureSkipVerify: true,
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
@@ -45,7 +46,7 @@ func (s StsClient) GetToken() (*StsResponse, error) {
 
 
 	// Create the SOAP request
-	stsRequest, err := s.stsRequestFactory.CreateStsRequest(false)
+	stsRequest, err := s.stsRequestFactory.CreateStsRequest(true)
 	if (err != nil) {
                 return nil, err
         }

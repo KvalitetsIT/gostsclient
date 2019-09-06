@@ -40,14 +40,14 @@ type StsRequestFactory struct {
 	appliesToAddress	string
 }
 
-func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore) (*StsRequestFactory, error) {
+func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore, stsUrl string) (*StsRequestFactory, error) {
 
 	keyInfoElement, err := getKeyInfoElementFromKeyStore(keyStore)
 	if (err != nil) {
 		return nil, err
 	}
 
-	stsRequestFactory := StsRequestFactory{ keyInfoElement: keyInfoElement, keyStore: keyStore, stsUrl: "https://sts.test-vdxapi.vconf.dk/sts/service/sts", appliesToAddress: "urn:medcom:videoapi" }
+	stsRequestFactory := StsRequestFactory{ keyInfoElement: keyInfoElement, keyStore: keyStore, stsUrl: stsUrl, appliesToAddress: "urn:kit:testa:servicea" }
 
 	return &stsRequestFactory, nil
 }
@@ -160,12 +160,13 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 				timeStamp := security.CreateElement("wsu:Timestamp")
 				timeStampId := fmt.Sprintf("TS-%s", uuid.New().String())
-				timeStamp.CreateAttr(id_attr, timeStampId)
+				addAttributesToSignableHeaderElement(timeStamp, timeStampId)
+
 					//loc, _ := time.LoadLocation("Europe/Copenhagen")
-					cr := time.Now().Add(time.Minute * -2)
+					cr := time.Now()//.Add(time.Minute * -2)
 					created := timeStamp.CreateElement("wsu:Created")
 					created.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.000Z", cr.Year(), cr.Month(), cr.Day(), cr.Hour(), cr.Minute(), cr.Second()))
-					ex := cr.Add(time.Minute * 8)
+					ex := cr.Add(time.Minute * 5)
 					expires := timeStamp.CreateElement("wsu:Expires")
 					expires.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.000Z", ex.Year(), ex.Month(), ex.Day(), ex.Hour(), ex.Minute(), ex.Second()))
 
@@ -213,21 +214,35 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 				keyType.SetText("http://docs.oasis-open.org/ws-sx/ws-trust/200512/PublicKey")
 
 				useKey := requestSecurityToken.CreateElement("wst:UseKey")
-				useKey.CreateAttr(namespace_ds, uri_ds)
 
-				useKey.AddChild(keyInfoElement)
+				//useKey.AddChild(keyInfoElement)
 
-	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo }, keyInfoDecorator
+				keyInfoE := useKey.CreateElement("ds:KeyInfo")
+				keyInfoE.CreateAttr(namespace_ds, uri_ds)
+
+					keyValue := keyInfoE.CreateElement("ds:KeyValue")
+
+						rsaKeyValue := keyValue.CreateElement("ds:RSAKeyValue")
+
+							modulus := rsaKeyValue.CreateElement("ds:Modulus")
+							modulus.SetText("rXApxxjCWlsEfeKgUPOl1mJC9aqkkWooyUgOU+KsrH9qRCoK9xVdI7YJebwr5+TJtBbWkKkuD926SMxJV1LY6IT8tCflomIl4E5IZdRZPci1N71lQDV6SfNuGPHNpFpLssdSY34+t4/vuGeTZ2lJB5IP4sDvjAxJ+nXECcHmcupEEQu3wI2nijcWl4hRRSdhUuKDB/AiaZvsPKcdFj4WTlRdewJS4v5m1khwce6Zj1jw6N7PSQPHaisIxqx2SMHvKiepPuESgEpqP+sGRaL2ESJWuB1kTsNHmer6cJ+ba/pvJy3xraY7mrgRv/zWa+6Of9LSVw2hfFx3pEjBgYHhhw==")
+
+							exp := rsaKeyValue.CreateElement("ds:Exponent")
+							exp.SetText("AQAB")
+				// end
+
+				requestSecurityToken.CreateElement("wst:Renewing")
+	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo, timeStamp }, keyInfoDecorator
 }
 
 func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element, keyInfoDecorator func(*etree.Element)) (*etree.Document, error) {
 
         ctx := &dsig.SigningContext{
-                Hash:          crypto.SHA256,
+                Hash:          crypto.SHA1,
                 KeyStore:      factory.keyStore,
                 IdAttribute:   id_attr,
                 Prefix:        dsig.DefaultPrefix,
-                Canonicalizer: dsig.MakeC14N11Canonicalizer(),
+                Canonicalizer: dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList(""),//MakeC14N11Canonicalizer(),
         }
 
 	signature, err := ctx.ConstructSignatureRef(append(headersToSign, body), keyInfoDecorator, false)

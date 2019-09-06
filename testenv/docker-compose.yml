@@ -1,0 +1,45 @@
+version: '3'
+networks:
+  gostsclient:
+    driver: bridge
+services:
+   mysql:
+     image: mysql:5.5
+     environment:
+       - MYSQL_ROOT_PASSWORD=root
+       - MYSQL_DATABASE=sts
+       - MYSQL_USER=sts
+       - MYSQL_PASSWORD=sts123
+     networks:
+       - gostsclient
+   sts:
+     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts-frontend:b32bead445e5c3d42234b8b3d4f2cdea86ff71c0
+     environment:
+       - SERVER_NAME=sts
+       - STS_HOST=sts-backend
+     volumes:
+       - ./sts/sts.cer:/certificates/sts.cer
+       - ./sts/sts.pem:/certificates/sts.pem
+     networks:
+       - gostsclient
+   sts-backend:
+     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts:b32bead445e5c3d42234b8b3d4f2cdea86ff71c0
+     environment:
+       - LOG_LEVEL=DEBUG
+       - STS_ISSUER=stsa
+       - STS_TOKEN_LIFETIME=2800
+       - STS_CERTIFICATE=/certificates/sts.cer
+       - STS_KEY=/certificates/sts.pem
+       - STS_TRUST_CA_PATH=/trust/*
+       - MYSQL_HOST=mysql
+       - MYSQL_DBNAME=sts
+       - MYSQL_USERNAME=sts
+       - MYSQL_PASSWORD=sts123
+       - JSON_CLIENT_PATH=/clients/clients.json
+     volumes:
+       - ./sts/sts.cer:/certificates/sts.cer
+       - ./sts/sts.pem:/certificates/sts.pem
+       - ./sts/clients:/clients
+     networks:
+       - gostsclient
+

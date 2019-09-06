@@ -16,7 +16,7 @@ func TestGetStsRequestNoSignature(t *testing.T) {
 	// Given
 	clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
 	keyStore := dsig.TLSCertKeyStore(clientKeyPair)
-        subject, _ := NewStsRequestFactory(keyStore)
+        subject, _ := NewStsRequestFactory(keyStore, "https://test")
 
 
 	// When
@@ -33,7 +33,7 @@ func TestGetStsRequestSigned(t *testing.T) {
         // Given
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
         keyStore := dsig.TLSCertKeyStore(clientKeyPair)
-        subject, _ := NewStsRequestFactory(keyStore)
+        subject, _ := NewStsRequestFactory(keyStore, "https://test")
 
         // When
         request, err := subject.CreateStsRequest(true)

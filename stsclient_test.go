@@ -17,12 +17,12 @@ import (
 func TestGetToken(t *testing.T) {
 
 	// Given
-	stsCert, _ := ioutil.ReadFile("./testdata/sts_test-vdxapi_vconf_dk.crt")
+	stsCert, _ := ioutil.ReadFile("./testenv/sts/sts.cer")
       	stsBlock, _ := pem.Decode([]byte(stsCert))
     	stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
 
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts.test-vdxapi.vconf.dk/sts/service/sts")
+	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts/sts/service/sts")
 
 	// When
 	response, err := subject.GetToken()
