@@ -13,8 +13,10 @@ import (
 )
 
 const id_attr			= "wsu:Id"
+
 const namespace_adr		= "xmlns:adr"
 const namespace_ds		= "xmlns:ds"
+const namespace_ic		= "xmlns:ic"
 const namespace_soap		= "xmlns:soap"
 const namespace_wsu		= "xmlns:wsu"
 const namespace_wst		= "xmlns:wst"
@@ -22,6 +24,7 @@ const namespace_wsse		= "xmlns:wsse"
 const namespace_wsp		= "xmlns:wsp"
 const uri_adr			= "http://www.w3.org/2005/08/addressing"
 const uri_ds			= "http://www.w3.org/2000/09/xmldsig#"
+const uri_ic			= "http://schemas.xmlsoap.org/ws/2005/05/identity"
 const uri_soap			= "http://schemas.xmlsoap.org/soap/envelope/"
 const uri_wsu 			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
 const uri_wst			= "http://docs.oasis-open.org/ws-sx/ws-trust/200512"
@@ -186,6 +189,16 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 					endpointRef.CreateAttr(namespace_adr, uri_adr)
 						address := endpointRef.CreateElement("adr:Address")
 						address.SetText(appliesToAddress)
+
+				claimsElement := requestSecurityToken.CreateElement("wst:Claims")
+				claimsElement.CreateAttr(namespace_ic, uri_ic)
+				for claimName, claimValue := range claims {
+
+					claimValueElement := claimsElement.CreateElement("ic:ClaimValue")
+					claimValueElement.CreateAttr("Uri", claimName)
+						value := claimValueElement.CreateElement("ic:Value")
+						value.SetText(claimValue)
+				}
 
 				tokenType := requestSecurityToken.CreateElement("wst:TokenType")
 				tokenType.SetText("http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0")

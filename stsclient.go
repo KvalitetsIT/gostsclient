@@ -9,7 +9,9 @@ import (
 )
 
 type StsClient struct {
+
 	clientKeyPair		*tls.Certificate
+
 	stsRequestFactory	*StsRequestFactory
 
 	client			*http.Client
@@ -30,7 +32,6 @@ func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl st
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{ *keyPair },
 		RootCAs:      caCertPool,
-//		InsecureSkipVerify: true,
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
