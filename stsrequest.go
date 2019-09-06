@@ -2,9 +2,11 @@ package stsclient
 
 import (
 	etree "github.com/beevik/etree"
+	"bytes"
 	"crypto"
 	"fmt"
 	"time"
+	"net/http"
 	"encoding/base64"
 	dsig "github.com/russellhaering/goxmldsig"
 	uuid "github.com/google/uuid"
@@ -33,67 +35,41 @@ type StsRequest struct {
 
 type StsRequestFactory struct {
 
-	keyInfoElement		*etree.Element
 	keyStore		dsig.TLSCertKeyStore
 
 	stsUrl			string
-	appliesToAddress	string
 }
 
 func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore, stsUrl string) (*StsRequestFactory, error) {
 
-	keyInfoElement, err := getKeyInfoElementFromKeyStore(keyStore)
-	if (err != nil) {
-		return nil, err
-	}
-
-	stsRequestFactory := StsRequestFactory{ keyInfoElement: keyInfoElement, keyStore: keyStore, stsUrl: stsUrl, appliesToAddress: "urn:kit:testa:servicea" }
+	stsRequestFactory := StsRequestFactory{ keyStore: keyStore, stsUrl: stsUrl }
 
 	return &stsRequestFactory, nil
 }
 
-func getKeyInfoElementFromKeyStore(keyStore dsig.TLSCertKeyStore) (*etree.Element, error) {
-
-	ctx := dsig.NewDefaultSigningContext(keyStore)
-
-	doc := etree.NewDocument()
-        doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
-        root := doc.CreateElement("Root")
-	root.CreateAttr("ID", "dummy")
-
-	signed, err := ctx.SignEnveloped(root)
-      	if (err != nil) {
-		return nil, err
-        }
-	doc.SetRoot(signed)
-
-	keyInfoPath, err := etree.CompilePath("./Root/ds:Signature/ds:KeyInfo")
-	if (err != nil) {
+func (factory *StsRequestFactory) CreateStsIssueRequest(appliesTo string, claims map[string]string) (*http.Request, error) {
+        stsRequest, err := factory.CreateStsRequest(appliesTo, claims, true)
+        if (err != nil) {
                 return nil, err
         }
 
-	keyInfo := doc.FindElementPath(keyInfoPath)
-	if (keyInfo == nil) {
-		panic("Keyinfo not found")
-	}
-	docResult := etree.NewDocument()
-	docResult.SetRoot(keyInfo)
+        soapStr, err := stsRequest.SoapEnvelope.WriteToString()
+        if (err != nil) {
+                return nil, err
+        }
 
-	return keyInfo, nil
+        issueRequest, err := http.NewRequest("POST", factory.stsUrl, bytes.NewBuffer([]byte(soapStr)))
+        issueRequest.Header.Set("SOAPAction", "http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
+
+	return issueRequest, nil
 }
 
+func (factory *StsRequestFactory) CreateStsRequest(appliesTo string, claims map[string]string, sign bool) (*StsRequest, error) {
 
-func (factory *StsRequestFactory) CreateStsRequest(sign bool) (*StsRequest, error) {
-
-	_, cert, err := factory.keyStore.GetKeyPair()
-	if (err != nil) {
-		return nil, err
-	}
-
-	soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator := createIssueRequest(factory.keyInfoElement, factory.stsUrl, factory.appliesToAddress, cert)
+	soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator := factory.createIssueRequest(appliesTo, claims)
 
 	if (sign) {
-		signedEnvelope, err := factory.signSoapRequest3(soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator)
+		signedEnvelope, err := factory.signSoapRequest(soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator)
 		if (err != nil) {
 			return nil, err
 		}
@@ -116,7 +92,12 @@ func addAttributesToSignableHeaderElement(headerElement *etree.Element, id strin
 
 // Det virker somom, at signeringen er meget følsom overfor namespace definitioner (noget med canonization), hvis du laver om i nedenstående, så test, at output kan
 // verificeres på https://tools.chilkat.io/xmlDsigVerify.cshtml (ret tests til, så du får output)
-func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToAddress string, cert []byte) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element, func(*etree.Element)) {
+func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, claims map[string]string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element, func(*etree.Element)) {
+
+        _, cert, err := factory.keyStore.GetKeyPair()
+        if (err != nil) {
+                panic(err)
+        }
 
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -142,14 +123,14 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
                         addAttributesToSignableHeaderElement(messageId, messageIdId)
 
 			to := header.CreateElement("adr:To")
-			to.SetText(stsUrl)
-			toId := fmt.Sprintf("_%s", uuid.New().String()) 
+			to.SetText(factory.stsUrl)
+			toId := fmt.Sprintf("_%s", uuid.New().String())
 			addAttributesToSignableHeaderElement(to, toId)
 
  			replyTo := header.CreateElement("adr:ReplyTo")
 				replyToAddress := replyTo.CreateElement("adr:Address")
 				replyToAddress.SetText("http://www.w3.org/2005/08/addressing/anonymous")
-			replyToId := fmt.Sprintf("_%s", uuid.New().String()) 
+			replyToId := fmt.Sprintf("_%s", uuid.New().String())
 			addAttributesToSignableHeaderElement(replyTo, replyToId)
 
 			security := header.CreateElement("wsse:Security")
@@ -162,8 +143,7 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 				timeStampId := fmt.Sprintf("TS-%s", uuid.New().String())
 				addAttributesToSignableHeaderElement(timeStamp, timeStampId)
 
-					//loc, _ := time.LoadLocation("Europe/Copenhagen")
-					cr := time.Now()//.Add(time.Minute * -2)
+					cr := time.Now()
 					created := timeStamp.CreateElement("wsu:Created")
 					created.SetText(fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d.000Z", cr.Year(), cr.Month(), cr.Day(), cr.Hour(), cr.Minute(), cr.Second()))
 					ex := cr.Add(time.Minute * 5)
@@ -215,34 +195,26 @@ func createIssueRequest(keyInfoElement *etree.Element, stsUrl string, appliesToA
 
 				useKey := requestSecurityToken.CreateElement("wst:UseKey")
 
-				//useKey.AddChild(keyInfoElement)
+					keyInfo := useKey.CreateElement("ds:KeyInfo")
+					keyInfo.CreateAttr(namespace_ds, uri_ds)
 
-				keyInfoE := useKey.CreateElement("ds:KeyInfo")
-				keyInfoE.CreateAttr(namespace_ds, uri_ds)
+						x509Data := keyInfo.CreateElement("ds:X509Data")
 
-					keyValue := keyInfoE.CreateElement("ds:KeyValue")
-
-						rsaKeyValue := keyValue.CreateElement("ds:RSAKeyValue")
-
-							modulus := rsaKeyValue.CreateElement("ds:Modulus")
-							modulus.SetText("rXApxxjCWlsEfeKgUPOl1mJC9aqkkWooyUgOU+KsrH9qRCoK9xVdI7YJebwr5+TJtBbWkKkuD926SMxJV1LY6IT8tCflomIl4E5IZdRZPci1N71lQDV6SfNuGPHNpFpLssdSY34+t4/vuGeTZ2lJB5IP4sDvjAxJ+nXECcHmcupEEQu3wI2nijcWl4hRRSdhUuKDB/AiaZvsPKcdFj4WTlRdewJS4v5m1khwce6Zj1jw6N7PSQPHaisIxqx2SMHvKiepPuESgEpqP+sGRaL2ESJWuB1kTsNHmer6cJ+ba/pvJy3xraY7mrgRv/zWa+6Of9LSVw2hfFx3pEjBgYHhhw==")
-
-							exp := rsaKeyValue.CreateElement("ds:Exponent")
-							exp.SetText("AQAB")
-				// end
+							x509Certificate := x509Data.CreateElement("ds:X509Certificate")
+							x509Certificate.SetText(binarySecurityTokenValue)
 
 				requestSecurityToken.CreateElement("wst:Renewing")
 	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo, timeStamp }, keyInfoDecorator
 }
 
-func (factory StsRequestFactory) signSoapRequest3(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element, keyInfoDecorator func(*etree.Element)) (*etree.Document, error) {
+func (factory StsRequestFactory) signSoapRequest(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element, keyInfoDecorator func(*etree.Element)) (*etree.Document, error) {
 
         ctx := &dsig.SigningContext{
                 Hash:          crypto.SHA1,
                 KeyStore:      factory.keyStore,
                 IdAttribute:   id_attr,
                 Prefix:        dsig.DefaultPrefix,
-                Canonicalizer: dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList(""),//MakeC14N11Canonicalizer(),
+                Canonicalizer: dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList(""),
         }
 
 	signature, err := ctx.ConstructSignatureRef(append(headersToSign, body), keyInfoDecorator, false)

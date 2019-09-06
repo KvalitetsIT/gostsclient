@@ -20,7 +20,7 @@ func TestGetStsRequestNoSignature(t *testing.T) {
 
 
 	// When
-	request, err := subject.CreateStsRequest(false)
+	request, err := subject.CreateStsRequest("audience", nil, false)
 
 	// Then
 	soapStr, _ := request.SoapEnvelope.WriteToString()
@@ -36,7 +36,7 @@ func TestGetStsRequestSigned(t *testing.T) {
         subject, _ := NewStsRequestFactory(keyStore, "https://test")
 
         // When
-        request, err := subject.CreateStsRequest(true)
+        request, err := subject.CreateStsRequest("audience", nil, true)
 
 
 	// Then

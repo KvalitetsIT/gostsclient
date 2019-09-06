@@ -25,7 +25,7 @@ func TestGetToken(t *testing.T) {
 	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts/sts/service/sts")
 
 	// When
-	response, err := subject.GetToken()
+	response, err := subject.GetToken("urn:kit:testa:servicea")
 
 	assert.NilError(t, err)
         assert.Equal(t, "2.0", response.ToString())
