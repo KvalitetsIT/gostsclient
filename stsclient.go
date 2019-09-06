@@ -41,10 +41,10 @@ func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl st
 	return &stsClient, nil
 }
 
-func (s StsClient) GetToken(appliesTo string) (*StsResponse, error) {
+func (s StsClient) GetToken(appliesTo string, claims map[string]string) (*StsResponse, error) {
 
 	// Create the SOAP request
-	issueRequest, err := s.stsRequestFactory.CreateStsIssueRequest(appliesTo, nil)
+	issueRequest, err := s.stsRequestFactory.CreateStsIssueRequest(appliesTo, claims)
 	if (err != nil) {
                 return nil, err
         }

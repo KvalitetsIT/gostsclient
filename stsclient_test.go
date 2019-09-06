@@ -24,8 +24,11 @@ func TestGetToken(t *testing.T) {
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
 	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts/sts/service/sts")
 
+	claims := make(map[string]string)
+	claims["claim-a"] = "whatever"
+
 	// When
-	response, err := subject.GetToken("urn:kit:testa:servicea")
+	response, err := subject.GetToken("urn:kit:testa:servicea", claims)
 
 	assert.NilError(t, err)
         assert.Equal(t, "2.0", response.ToString())

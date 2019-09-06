@@ -28,6 +28,8 @@ services:
        - LOG_LEVEL=DEBUG
        - STS_ISSUER=stsa
        - STS_TOKEN_LIFETIME=2800
+       - STS_SUPPORTED_CLAIMS=claim-a,claim-b
+       - STS_COPY_ATTRIBUTES=claim-a
        - STS_CERTIFICATE=/certificates/sts.cer
        - STS_KEY=/certificates/sts.pem
        - STS_TRUST_CA_PATH=/trust/*
