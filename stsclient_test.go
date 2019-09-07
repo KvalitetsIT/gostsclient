@@ -14,53 +14,51 @@ import (
 	"io/ioutil"
 )
 
-func TestGetToken(t *testing.T) {
+func TestGetTokenFromVdxSts(t *testing.T) {
 
 	// Given
-	stsCert, _ := ioutil.ReadFile("./testenv/sts/sts.cer")
+	stsUrl := "https://sts.test-vdxapi.vconf.dk/sts/service/sts" 
+	stsCertFile := "./testdata/sts_test-vdxapi_vconf_dk.crt" 
+	audience := "urn:medcom:videoapi" 
+
+	stsCert, _ := ioutil.ReadFile(stsCertFile)
       	stsBlock, _ := pem.Decode([]byte(stsCert))
     	stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
 
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, "https://sts/sts/service/sts")
+	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
 
-	claims := make(map[string]string)
-	claims["claim-a"] = "whatever"
 
 	// When
-	response, err := subject.GetToken("urn:kit:testa:servicea", claims)
-
-	assert.NilError(t, err)
-        assert.Equal(t, "2.0", response.ToString())
-
-
-
-	// Given
-//	clientCert, err := ioutil.ReadFile("./testdata/client.crt")
-//	block, _ := pem.Decode([]byte(clientCert))
-//	cert, err := x509.ParseCertificate(block.Bytes)
-//	context := dsig.NewDefaultValidationContext(&dsig.MemoryX509CertificateStore{
- //       	Roots: []*x509.Certificate { cert },
- //   	})
-
-   /*     subject := NewTokenAuthenticator(context)
-	bs, err := ioutil.ReadFile("./testdata/authenticate_body_first")
-	assert.NilError(t, err, "couldn't read testdata authenticate_body_first")
-
-	// When
-	assertion, errProcess := subject.ParseAndValidateAuthenticationRequestPayload(bs) 
+	response, err := subject.GetToken(audience, nil)
 
 	// Then
-	assert.NilError(t, errProcess)
-	assert.Equal(t, assertion.Version, "2.0")
-	assert.Equal(t, len(assertion.AttributeStatement.Attributes), 4)
-	// TODO: tjek flere*/
+	assert.NilError(t, err)
+        assert.Equal(t, "test: output the response for now", response.ToString())
 }
 
 
+func TestGetTokenFromLocalTestSts(t *testing.T) {
 
+        // Given
+        stsUrl := "https://sts/sts/service/sts"
+        stsCertFile := "./testenv/sts/sts.cer"
+        audience := "urn:kit:testa:servicea"
 
-// Testcase med forkert udsteder
+        stsCert, _ := ioutil.ReadFile(stsCertFile)
+        stsBlock, _ := pem.Decode([]byte(stsCert))
+        stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
 
-// Testcase
+        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+        subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
+
+        claims := make(map[string]string)
+      	claims["claim-a"] = "whatever"
+
+        // When
+        response, err := subject.GetToken(audience, claims)
+
+        assert.NilError(t, err)
+        assert.Equal(t, "test: output the response for now", response.ToString())
+}
 
