@@ -1,7 +1,6 @@
 package stsclient
 
 import (
-	"io/ioutil"
 	"net/http"
 	"crypto/tls"
 	"crypto/x509"
@@ -53,8 +52,7 @@ func (s StsClient) GetToken(appliesTo string, claims map[string]string) (*StsRes
         if (err != nil) {
                 return nil, err
         }
-	defer issueResp.Body.Close()
-	body, err := ioutil.ReadAll(issueResp.Body)
+	stsResponse, err := ParseStsResponse(issueResp)
 
-	return ParseStsResponse(body), nil
+	return stsResponse, err
 }

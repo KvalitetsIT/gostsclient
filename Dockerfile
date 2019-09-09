@@ -11,7 +11,7 @@ RUN go get github.com/beevik/etree
 
 RUN echo "replace github.com/russellhaering/goxmldsig => github.com/evtr/goxmldsig latest" >> go.mod
 
-RUN go get github.com/russellhaering/goxmldsig
+RUN go get  github.com/russellhaering/goxmldsig
 #RUN go get github.com/russellhaering/gosaml2
 
 # Kitcaddy module source

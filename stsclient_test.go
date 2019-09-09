@@ -8,9 +8,9 @@ import (
 	"gotest.tools/assert"
 	"encoding/pem"
 
-//        "github.com/russellhaering/gosaml2/types"
+       "encoding/xml"
+        saml2 "github.com/russellhaering/gosaml2/types"
 
-//  	"github.com/russellhaering/goxmldsig"
 	"io/ioutil"
 )
 
@@ -28,13 +28,16 @@ func TestGetTokenFromVdxSts(t *testing.T) {
         clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
 	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
 
-
 	// When
 	response, err := subject.GetToken(audience, nil)
 
 	// Then
 	assert.NilError(t, err)
-        assert.Equal(t, "test: output the response for now", response.ToString())
+
+       	var assertion saml2.Assertion
+        err = xml.Unmarshal([]byte(response.assertion), &assertion)
+        assert.NilError(t, err, "Could not parse to assertion")
+        assert.Equal(t, "CN=medcomsystemuser,O=Internet Widgits Pty Ltd,ST=Some-State,C=DK", assertion.Subject.NameID.Value)
 }
 
 
@@ -53,12 +56,29 @@ func TestGetTokenFromLocalTestSts(t *testing.T) {
         subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
 
         claims := make(map[string]string)
-      	claims["claim-a"] = "whatever"
+	claimKey := "claim-a"
+	claimValue := "whatever"
+      	claims[claimKey] = claimValue
 
         // When
         response, err := subject.GetToken(audience, claims)
 
         assert.NilError(t, err)
-        assert.Equal(t, "test: output the response for now", response.ToString())
+
+        var assertion saml2.Assertion
+        err = xml.Unmarshal([]byte(response.assertion), &assertion)
+        assert.NilError(t, err, "Could not parse to assertion")
+        assert.Equal(t, "CN=medcomsystemuser,O=Internet Widgits Pty Ltd,ST=Some-State,C=DK", assertion.Subject.NameID.Value)
+
+	claimsReturned := make(map[string][]saml2.AttributeValue)
+	for _, attribute := range assertion.AttributeStatement.Attributes {
+		claimsReturned[attribute.Name] = attribute.Values
+	}
+
+	claimValues, containsClaimA := claimsReturned[claimKey]
+	assert.Equal(t, true, containsClaimA)
+	assert.Equal(t, 1, len(claimValues))
+	assert.Equal(t, claimValue, claimValues[0].Value)
+
 }
 

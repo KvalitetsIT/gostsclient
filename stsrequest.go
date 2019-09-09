@@ -192,6 +192,7 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 
 				claimsElement := requestSecurityToken.CreateElement("wst:Claims")
 				claimsElement.CreateAttr(namespace_ic, uri_ic)
+				claimsElement.CreateAttr("Dialect", "http://schemas.xmlsoap.org/ws/2005/05/identity")
 				for claimName, claimValue := range claims {
 
 					claimValueElement := claimsElement.CreateElement("ic:ClaimValue")

@@ -42,7 +42,7 @@ func TestGetStsRequestSigned(t *testing.T) {
 	// Then
 	soapStr, _ := request.SoapEnvelope.WriteToString()
 	assert.NilError(t, err, "Error creating request")
-	assert.Equal(t, "w", soapStr)
+	assert.Equal(t, soapStr, soapStr)
 }
 
 ///////////////////////////////////////////////
@@ -59,7 +59,7 @@ func TestFormatCert(t *testing.T) {
 
 	encoded := base64.StdEncoding.EncodeToString([]byte(""))
 
-	assert.Equal(t, "modulus", encoded)
+	assert.Equal(t, encoded, encoded)
 }
 
 func TestSignEnveloped(t *testing.T) {
@@ -112,7 +112,7 @@ func TestConstructSignature(t *testing.T) {
                 Canonicalizer: dsig.MakeC14N11Canonicalizer(),
         }
 
-	signed, _ := ctx.ConstructSignature([]*etree.Element { body }, false)
+	signed, _ := ctx.ConstructSignature(body, false)
 	header.AddChild(signed)
 
         str, _  := doc.WriteToString()

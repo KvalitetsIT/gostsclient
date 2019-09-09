@@ -13,7 +13,7 @@ services:
      networks:
        - gostsclient
    sts:
-     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts-frontend:b32bead445e5c3d42234b8b3d4f2cdea86ff71c0
+     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts-frontend:543492665993a4323f1d4fc94d266278d58764fb
      environment:
        - SERVER_NAME=sts
        - STS_HOST=sts-backend
@@ -23,7 +23,7 @@ services:
      networks:
        - gostsclient
    sts-backend:
-     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts:b32bead445e5c3d42234b8b3d4f2cdea86ff71c0
+     image: kitdocker.kvalitetsit.dk/kvalitetsit/sts:543492665993a4323f1d4fc94d266278d58764fb
      environment:
        - LOG_LEVEL=DEBUG
        - STS_ISSUER=stsa
