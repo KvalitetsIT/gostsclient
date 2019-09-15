@@ -2,7 +2,7 @@ package stsclient
 
 import (
 	"testing"
-	"crypto/tls"
+//	"crypto/tls"
 	"crypto/x509"
 
 	"gotest.tools/assert"
@@ -25,8 +25,11 @@ func TestGetTokenFromVdxSts(t *testing.T) {
       	stsBlock, _ := pem.Decode([]byte(stsCert))
     	stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
 
-        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-	subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
+//        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+	subject, err := NewStsClient(stsCertToTrust, "./testdata/medcom.cer", "./testdata/medcom.pem", stsUrl)
+	if (err != nil) {
+		panic(err)
+	}
 
 	// When
 	response, err := subject.GetToken(audience, nil)
@@ -52,8 +55,11 @@ func TestGetTokenFromLocalTestSts(t *testing.T) {
         stsBlock, _ := pem.Decode([]byte(stsCert))
         stsCertToTrust, _ := x509.ParseCertificate(stsBlock.Bytes)
 
-        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-        subject, _ := NewStsClient(stsCertToTrust, &clientKeyPair, stsUrl)
+//        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+        subject, err := NewStsClient(stsCertToTrust, "./testdata/medcom.cer", "./testdata/medcom.pem", stsUrl)
+	if (err != nil) {
+		panic(err)
+	}
 
         claims := make(map[string]string)
 	claimKey := "claim-a"

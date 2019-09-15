@@ -4,9 +4,12 @@ import (
 	"testing"
 	"crypto"
 	"crypto/tls"
-//	"crypto/x509"
+	"crypto/x509"
+	"crypto/rsa"
+	"encoding/pem"
 	"encoding/base64"
  	"gotest.tools/assert"
+	"io/ioutil"
   	dsig "github.com/russellhaering/goxmldsig"
 	etree "github.com/beevik/etree"
 )
@@ -14,9 +17,7 @@ import (
 func TestGetStsRequestNoSignature(t *testing.T) {
 
 	// Given
-	clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-	keyStore := dsig.TLSCertKeyStore(clientKeyPair)
-        subject, _ := NewStsRequestFactory(keyStore, "https://test")
+        subject, _ := createRequestFactory()
 
 
 	// When
@@ -31,9 +32,7 @@ func TestGetStsRequestNoSignature(t *testing.T) {
 func TestGetStsRequestSigned(t *testing.T) {
 
         // Given
-        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
-        keyStore := dsig.TLSCertKeyStore(clientKeyPair)
-        subject, _ := NewStsRequestFactory(keyStore, "https://test")
+        subject, _ := createRequestFactory()
 
         // When
         request, err := subject.CreateStsRequest("audience", nil, true)
@@ -45,6 +44,26 @@ func TestGetStsRequestSigned(t *testing.T) {
 	assert.Equal(t, soapStr, soapStr)
 }
 
+func createRequestFactory() (*StsRequestFactory, error) {
+
+	certFileContent, err := ioutil.ReadFile("./testdata/medcom.cer")
+        if (err != nil) {
+                return nil, err
+        }
+        certBlock, _ := pem.Decode([]byte(certFileContent))
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+        if (err != nil) {
+                return nil, err
+        }
+        rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
+
+        clientKeyPair, _ := tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+        keyStore := dsig.TLSCertKeyStore(clientKeyPair)
+
+        subject, err := NewStsRequestFactory(keyStore, rsaPublicKey, "https://test")
+	return subject, err
+}
+
 ///////////////////////////////////////////////
 //
 // Ikke rigtige tests, men diverse kodestumper
@@ -53,13 +72,13 @@ func TestGetStsRequestSigned(t *testing.T) {
 func TestFormatCert(t *testing.T) {
 
         // Given
-        tls.LoadX509KeyPair("./testdata/medcom.cer", "./testdata/medcom.pem")
+	certFileContent, _ := ioutil.ReadFile("./testdata/medcom.cer")
+	certBlock, _ := pem.Decode([]byte(certFileContent))
+        cert, _ := x509.ParseCertificate(certBlock.Bytes)
 
-	//clientPubBytes := x509.MarshalPKCS1PublicKey(clientKeyPair.PrivateKey.PublicKey())
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
 
-	encoded := base64.StdEncoding.EncodeToString([]byte(""))
-
-	assert.Equal(t, encoded, encoded)
+	assert.Equal(t, base64.StdEncoding.EncodeToString(rsaPublicKey.N.Bytes()), base64.StdEncoding.EncodeToString(rsaPublicKey.N.Bytes()))
 }
 
 func TestSignEnveloped(t *testing.T) {

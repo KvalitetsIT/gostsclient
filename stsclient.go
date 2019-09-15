@@ -4,12 +4,16 @@ import (
 	"net/http"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/rsa"
+	"encoding/pem"
+	"io/ioutil"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
 type StsClient struct {
 
 	clientKeyPair		*tls.Certificate
+	PublicKey		*rsa.PublicKey
 
 	stsRequestFactory	*StsRequestFactory
 
@@ -17,30 +21,46 @@ type StsClient struct {
 
 }
 
-func NewStsClient(trust *x509.Certificate, keyPair *tls.Certificate, issueUrl string) (*StsClient, error) {
+func NewStsClient(trust *x509.Certificate, certFile string, certKey string, issueUrl string) (*StsClient, error) {
+
+      	keyPair, err := tls.LoadX509KeyPair(certFile, certKey)
+	if (err != nil) {
+		return nil, err
+	}
+
+	certFileContent, err := ioutil.ReadFile(certFile)
+	if (err != nil) {
+		return nil, err
+	}
+        certBlock, _ := pem.Decode([]byte(certFileContent))
+        cert, err := x509.ParseCertificate(certBlock.Bytes)
+        if (err != nil) {
+                return nil, err
+        }
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
 
 	// Setup HTTPS client
 	caCertPool := x509.NewCertPool()
 	caCertPool.AddCert(trust)
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{ *keyPair },
+		Certificates: []tls.Certificate{ keyPair },
 		RootCAs:      caCertPool,
 	}
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport}
 
-	return NewStsClientWithHttpClient(client, keyPair, issueUrl)
+	return NewStsClientWithHttpClient(client, &keyPair, rsaPublicKey, issueUrl)
 }
 
-func NewStsClientWithHttpClient(httpClient *http.Client, keyPair *tls.Certificate, issueUrl string) (*StsClient, error) {
+func NewStsClientWithHttpClient(httpClient *http.Client, keyPair *tls.Certificate, publicKey *rsa.PublicKey, issueUrl string) (*StsClient, error) {
 
         keyStore := dsig.TLSCertKeyStore(*keyPair)
-        stsRequestFactory, err := NewStsRequestFactory(keyStore, issueUrl)
+        stsRequestFactory, err := NewStsRequestFactory(keyStore, publicKey, issueUrl)
         if (err != nil) {
                 return nil, err
         }
 
-        stsClient := StsClient{ clientKeyPair: keyPair, stsRequestFactory: stsRequestFactory, client: httpClient }
+        stsClient := StsClient{ clientKeyPair: keyPair, stsRequestFactory: stsRequestFactory, client: httpClient, PublicKey: publicKey }
 
         return &stsClient, nil
 }

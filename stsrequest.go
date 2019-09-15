@@ -4,6 +4,7 @@ import (
 	etree "github.com/beevik/etree"
 	"bytes"
 	"crypto"
+	"crypto/rsa"
 	"fmt"
 	"time"
 	"net/http"
@@ -39,13 +40,13 @@ type StsRequest struct {
 type StsRequestFactory struct {
 
 	keyStore		dsig.TLSCertKeyStore
-
+	PublicKey               *rsa.PublicKey
 	stsUrl			string
 }
 
-func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore, stsUrl string) (*StsRequestFactory, error) {
+func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore, publicKey *rsa.PublicKey, stsUrl string) (*StsRequestFactory, error) {
 
-	stsRequestFactory := StsRequestFactory{ keyStore: keyStore, stsUrl: stsUrl }
+	stsRequestFactory := StsRequestFactory{ keyStore: keyStore, stsUrl: stsUrl, PublicKey: publicKey }
 
 	return &stsRequestFactory, nil
 }
@@ -101,6 +102,8 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
         if (err != nil) {
                 panic(err)
         }
+
+	modulusValue := base64.StdEncoding.EncodeToString(factory.PublicKey.N.Bytes())
 
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -212,10 +215,19 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 					keyInfo := useKey.CreateElement("ds:KeyInfo")
 					keyInfo.CreateAttr(namespace_ds, uri_ds)
 
-						x509Data := keyInfo.CreateElement("ds:X509Data")
+						keyValue := keyInfo.CreateElement("ds:KeyValue")
+
+							rsaKeyValue := keyValue.CreateElement("ds:RSAKeyValue")
+
+								modulus := rsaKeyValue.CreateElement("ds:Modulus")
+								modulus.SetText(modulusValue)
+
+								exponent := rsaKeyValue.CreateElement("ds:Exponent")
+								exponent.SetText("AQAB")
+					/*	x509Data := keyInfo.CreateElement("ds:X509Data")
 
 							x509Certificate := x509Data.CreateElement("ds:X509Certificate")
-							x509Certificate.SetText(binarySecurityTokenValue)
+							x509Certificate.SetText(binarySecurityTokenValue)*/
 
 				requestSecurityToken.CreateElement("wst:Renewing")
 	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo, timeStamp }, keyInfoDecorator
