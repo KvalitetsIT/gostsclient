@@ -90,6 +90,18 @@ func (s StsClient) OnBehalfOf(appliesTo string, onBehalfOf []byte, claims map[st
         return s.request(issueRequest)
 }
 
+func (s StsClient) ActAs(appliesTo string, actAs []byte, claims map[string]string) (*StsResponse, error) {
+
+        // Create the SOAP request
+        issueRequest, err := s.stsRequestFactory.CreateActAs(appliesTo, actAs, claims)
+        if (err != nil) {
+                return nil, err
+        }
+
+        return s.request(issueRequest)
+}
+
+
 func (s StsClient) request(issueRequest *http.Request) (*StsResponse, error) {
 
 	issueResp, err := s.client.Do(issueRequest)

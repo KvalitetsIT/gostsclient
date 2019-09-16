@@ -22,6 +22,7 @@ const namespace_saml2		= "xmlns:saml2"
 const namespace_soap		= "xmlns:soap"
 const namespace_wsu		= "xmlns:wsu"
 const namespace_wst		= "xmlns:wst"
+const namespace_wst14		= "xmlns:wst14"
 const namespace_wsse		= "xmlns:wsse"
 const namespace_wsp		= "xmlns:wsp"
 const namespace_xsi		= "xmlns:xsi"
@@ -32,6 +33,7 @@ const uri_saml2			= "urn:oasis:names:tc:SAML:2.0:assertion"
 const uri_soap			= "http://schemas.xmlsoap.org/soap/envelope/"
 const uri_wsu 			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
 const uri_wst			= "http://docs.oasis-open.org/ws-sx/ws-trust/200512"
+const uri_wst14			= "http://docs.oasis-open.org/ws-sx/ws-trust/200802"
 const uri_wsse			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
 const uri_wsp			= "http://www.w3.org/ns/ws-policy"
 const uri_xsi			= "http://www.w3.org/2001/XMLSchema-instance"
@@ -69,6 +71,17 @@ func (factory *StsRequestFactory) CreateOnBehalfOf(appliesTo string, onBehalfOf 
 
 	return factory.createRequest(appliesTo, di, claims, true)
 }
+
+func (factory *StsRequestFactory) CreateActAs(appliesTo string, actAs []byte, claims map[string]string) (*http.Request, error) {
+
+        di, err := createDelegationInfo(actAs, "wst14:ActAs")
+        if (err != nil) {
+                return nil, err
+        }
+
+        return factory.createRequest(appliesTo, di, claims, true)
+}
+
 
 func (factory *StsRequestFactory) createRequest(appliesTo string, delegationInfo *DelegationInfo, claims map[string]string, sign bool) (*http.Request, error) {
        	stsRequest, err := factory.CreateStsRequest(appliesTo, claims, delegationInfo, true)
@@ -236,6 +249,7 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, de
 		body.CreateAttr(namespace_saml2, uri_saml2)
         	body.CreateAttr(namespace_soap, uri_soap)
         	body.CreateAttr(namespace_wsse, uri_wsse)
+		body.CreateAttr(namespace_wst14, uri_wst14)
         	body.CreateAttr(namespace_wsu, uri_wsu)
 		body.CreateAttr(id_attr, bodyId)
 
