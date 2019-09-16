@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"encoding/pem"
 	"io/ioutil"
+//	"fmt"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
@@ -74,11 +75,31 @@ func (s StsClient) GetToken(appliesTo string, claims map[string]string) (*StsRes
                 return nil, err
         }
 
-    	issueResp, err := s.client.Do(issueRequest)
+	return s.request(issueRequest)
+}
+
+
+func (s StsClient) OnBehalfOf(appliesTo string, onBehalfOf []byte, claims map[string]string) (*StsResponse, error) {
+
+	// Create the SOAP request
+        issueRequest, err := s.stsRequestFactory.CreateOnBehalfOf(appliesTo, onBehalfOf, claims)
         if (err != nil) {
                 return nil, err
         }
-	stsResponse, err := ParseStsResponse(issueResp)
+
+        return s.request(issueRequest)
+}
+
+func (s StsClient) request(issueRequest *http.Request) (*StsResponse, error) {
+
+	issueResp, err := s.client.Do(issueRequest)
+        if (err != nil) {
+                return nil, err
+        }
+//	responseBody, _ := ioutil.ReadAll(issueResp.Body)
+//	return nil, fmt.Errorf(fmt.Sprintf("%s", string(responseBody)))
+        stsResponse, err := ParseStsResponse(issueResp)
 
 	return stsResponse, err
 }
+

@@ -18,19 +18,23 @@ const id_attr			= "wsu:Id"
 const namespace_adr		= "xmlns:adr"
 const namespace_ds		= "xmlns:ds"
 const namespace_ic		= "xmlns:ic"
+const namespace_saml2		= "xmlns:saml2"
 const namespace_soap		= "xmlns:soap"
 const namespace_wsu		= "xmlns:wsu"
 const namespace_wst		= "xmlns:wst"
 const namespace_wsse		= "xmlns:wsse"
 const namespace_wsp		= "xmlns:wsp"
+const namespace_xsi		= "xmlns:xsi"
 const uri_adr			= "http://www.w3.org/2005/08/addressing"
 const uri_ds			= "http://www.w3.org/2000/09/xmldsig#"
 const uri_ic			= "http://schemas.xmlsoap.org/ws/2005/05/identity"
+const uri_saml2			= "urn:oasis:names:tc:SAML:2.0:assertion"
 const uri_soap			= "http://schemas.xmlsoap.org/soap/envelope/"
 const uri_wsu 			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
 const uri_wst			= "http://docs.oasis-open.org/ws-sx/ws-trust/200512"
 const uri_wsse			= "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
 const uri_wsp			= "http://www.w3.org/ns/ws-policy"
+const uri_xsi			= "http://www.w3.org/2001/XMLSchema-instance"
 
 type StsRequest struct {
 
@@ -52,7 +56,22 @@ func NewStsRequestFactory(keyStore dsig.TLSCertKeyStore, publicKey *rsa.PublicKe
 }
 
 func (factory *StsRequestFactory) CreateStsIssueRequest(appliesTo string, claims map[string]string) (*http.Request, error) {
-        stsRequest, err := factory.CreateStsRequest(appliesTo, claims, true)
+	return factory.createRequest(appliesTo, nil, claims, true)
+}
+
+
+func (factory *StsRequestFactory) CreateOnBehalfOf(appliesTo string, onBehalfOf []byte, claims map[string]string) (*http.Request, error) {
+
+	di, err := createDelegationInfo(onBehalfOf, "wst:OnBehalfOf")
+	if (err != nil) {
+		return nil, err
+	}
+
+	return factory.createRequest(appliesTo, di, claims, true)
+}
+
+func (factory *StsRequestFactory) createRequest(appliesTo string, delegationInfo *DelegationInfo, claims map[string]string, sign bool) (*http.Request, error) {
+       	stsRequest, err := factory.CreateStsRequest(appliesTo, claims, delegationInfo, true)
         if (err != nil) {
                 return nil, err
         }
@@ -65,12 +84,17 @@ func (factory *StsRequestFactory) CreateStsIssueRequest(appliesTo string, claims
         issueRequest, err := http.NewRequest("POST", factory.stsUrl, bytes.NewBuffer([]byte(soapStr)))
         issueRequest.Header.Set("SOAPAction", "http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
 
-	return issueRequest, nil
+        return issueRequest, nil
 }
 
-func (factory *StsRequestFactory) CreateStsRequest(appliesTo string, claims map[string]string, sign bool) (*StsRequest, error) {
+func (factory *StsRequestFactory) CreateStsRequest(appliesTo string, claims map[string]string, delegationInfo *DelegationInfo, sign bool) (*StsRequest, error) {
 
-	soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator := factory.createIssueRequest(appliesTo, claims)
+	var inputElementCopy *etree.Element
+	if (delegationInfo != nil) {
+		inputElementCopy = delegationInfo.CopyElement()
+	}
+
+	soapEnvelope, securityElement, soapBody, headersToSign, delegationElement, keyInfoDecorator := factory.createIssueRequest(appliesTo, delegationInfo, claims)
 
 	if (sign) {
 		signedEnvelope, err := factory.signSoapRequest(soapEnvelope, securityElement, soapBody, headersToSign, keyInfoDecorator)
@@ -78,6 +102,11 @@ func (factory *StsRequestFactory) CreateStsRequest(appliesTo string, claims map[
 			return nil, err
 		}
 		soapEnvelope = signedEnvelope
+	}
+
+	if (delegationElement != nil) {
+		delegationElement.RemoveChildAt(0)
+		delegationElement.AddChild(inputElementCopy)
 	}
 
 	stsRequest := StsRequest{ SoapEnvelope: soapEnvelope }
@@ -88,15 +117,40 @@ func addAttributesToSignableHeaderElement(headerElement *etree.Element, id strin
 
 	headerElement.CreateAttr(namespace_adr, uri_adr)
         headerElement.CreateAttr(namespace_ds, uri_ds)
+	headerElement.CreateAttr(namespace_saml2, uri_saml2)
         headerElement.CreateAttr(namespace_soap, uri_soap)
         headerElement.CreateAttr(namespace_wsse, uri_wsse)
         headerElement.CreateAttr(namespace_wsu, uri_wsu)
+	headerElement.CreateAttr(namespace_xsi, uri_xsi)
         headerElement.CreateAttr(id_attr, id)
+}
+
+type DelegationInfo struct {
+
+	DelegationElement	*etree.Element
+	DelegationTagName	string
+}
+
+func createDelegationInfo(input []byte, tagName string) (*DelegationInfo, error) {
+
+	doc := etree.NewDocument()
+        err := doc.ReadFromBytes(input)
+        if (err != nil) {
+        	return nil, err
+        }
+        inputElement := doc.Root()
+
+	return &DelegationInfo{ DelegationElement: inputElement, DelegationTagName: tagName }, nil
+}
+
+func (di *DelegationInfo) CopyElement() *etree.Element {
+
+	return di.DelegationElement.Copy()
 }
 
 // Det virker somom, at signeringen er meget følsom overfor namespace definitioner (noget med canonization), hvis du laver om i nedenstående, så test, at output kan
 // verificeres på https://tools.chilkat.io/xmlDsigVerify.cshtml (ret tests til, så du får output)
-func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, claims map[string]string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element, func(*etree.Element)) {
+func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, delegation *DelegationInfo, claims map[string]string) (*etree.Document, *etree.Element, *etree.Element, []*etree.Element, *etree.Element, func(*etree.Element)) {
 
         _, cert, err := factory.keyStore.GetKeyPair()
         if (err != nil) {
@@ -105,15 +159,19 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 
 	modulusValue := base64.StdEncoding.EncodeToString(factory.PublicKey.N.Bytes())
 
+	var delegationResult *etree.Element
+
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 
 	envelope := doc.CreateElement("soap:Envelope")
 	envelope.CreateAttr(namespace_adr, uri_adr)
         envelope.CreateAttr(namespace_ds, uri_ds)
+	envelope.CreateAttr(namespace_saml2, uri_saml2)
 	envelope.CreateAttr(namespace_soap, uri_soap)
         envelope.CreateAttr(namespace_wsse, uri_wsse)
         envelope.CreateAttr(namespace_wsu, uri_wsu)
+	envelope.CreateAttr(namespace_xsi, uri_xsi)
 
 		header := envelope.CreateElement("soap:Header")
 		header.CreateAttr(namespace_soap, uri_soap)
@@ -175,6 +233,7 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 		bodyId := fmt.Sprintf("_%s", uuid.New().String())
 		body.CreateAttr(namespace_adr, uri_adr)
 		body.CreateAttr(namespace_ds, uri_ds)
+		body.CreateAttr(namespace_saml2, uri_saml2)
         	body.CreateAttr(namespace_soap, uri_soap)
         	body.CreateAttr(namespace_wsse, uri_wsse)
         	body.CreateAttr(namespace_wsu, uri_wsu)
@@ -223,14 +282,19 @@ func (factory *StsRequestFactory) createIssueRequest(appliesToAddress string, cl
 								modulus.SetText(modulusValue)
 
 								exponent := rsaKeyValue.CreateElement("ds:Exponent")
-								exponent.SetText("AQAB")
+								exponent.SetText("AQAB") // Most likely :-)
+
 					/*	x509Data := keyInfo.CreateElement("ds:X509Data")
 
 							x509Certificate := x509Data.CreateElement("ds:X509Certificate")
 							x509Certificate.SetText(binarySecurityTokenValue)*/
 
+				if (delegation != nil) {
+					delegationResult = requestSecurityToken.CreateElement(delegation.DelegationTagName)
+					delegationResult.AddChild(delegation.CopyElement())
+				}
 				requestSecurityToken.CreateElement("wst:Renewing")
-	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo, timeStamp }, keyInfoDecorator
+	return doc, security, body, []*etree.Element{ action, messageId, to, replyTo, timeStamp }, delegationResult, keyInfoDecorator
 }
 
 func (factory StsRequestFactory) signSoapRequest(document *etree.Document, security *etree.Element, body *etree.Element, headersToSign []*etree.Element, keyInfoDecorator func(*etree.Element)) (*etree.Document, error) {
