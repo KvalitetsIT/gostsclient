@@ -28,6 +28,7 @@ func ParseStsResponse(response *http.Response) (*StsResponse, error) {
 		fmt.Errorf("Response not OK (payload: %s)", body)
 	}
 
+	fmt.Println("her kuk")
 	assertion, err := HandleStsResponsePayload(body)
 	if (err != nil) {
 		return nil, err
@@ -40,10 +41,14 @@ func ParseStsResponse(response *http.Response) (*StsResponse, error) {
 
 func HandleStsResponsePayload(payload []byte) (string, error) {
 
+	fmt.Println("Portal. payload: ", payload)
 	responseDocument := etree.NewDocument()
 	if err := responseDocument.ReadFromBytes(payload); err != nil {
 		return "", err
 	}
+
+	my, _ :=	responseDocument.WriteToString()
+	fmt.Println("Portal. 2", my)
 
 	// The root node must be the SOAP Envelope
 	rootElement := responseDocument.Root()
@@ -88,6 +93,8 @@ func HandleStsResponsePayload(payload []byte) (string, error) {
 	assertionDocument.SetRoot(assertionElement.Copy())
 
 	assertionStr, err := assertionDocument.WriteToString()
+
+	fmt.Println("her er assertion", assertionStr)
 	if (err != nil) {
 		return "", err
 	}
@@ -95,11 +102,13 @@ func HandleStsResponsePayload(payload []byte) (string, error) {
 }
 
 func splitNameSpaceAndTag(element *etree.Element) (bool, string, string) {
+	fmt.Println("split. 1")
 	elementTagSlice := strings.Split(element.Tag, ":")
+	fmt.Println("split 2")
         if (len(elementTagSlice) == 2) {
 		return true, elementTagSlice[0], elementTagSlice[1]
         }
-
+	fmt.Println("split 3")
 	return false, "", element.Tag
 }
 

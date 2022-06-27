@@ -1,5 +1,8 @@
-FROM golang:1.12.7 as builder
+FROM golang:1.14 as builder
 ENV GO111MODULE=on
+
+RUN apt update && apt install ca-certificates libgnutls30 -y
+
 
 # Prepare for custom caddy build
 RUN mkdir /stsclient

@@ -11,6 +11,8 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
+const DEFAULT_CLAIMDIALECT = "http://schemas.xmlsoap.org/ws/2005/05/identity"
+
 type StsClient struct {
 
 	clientKeyPair		*tls.Certificate
@@ -20,6 +22,37 @@ type StsClient struct {
 
 	client			*http.Client
 
+}
+
+
+func NewStsClientKombit(trust *x509.Certificate, certFile string, certKey string, issueUrl string) (*StsClient, error) {
+	keyPair, err := tls.LoadX509KeyPair(certFile, certKey)
+	if (err != nil) {
+		return nil, err
+	}
+
+	certFileContent, err := ioutil.ReadFile(certFile)
+	if (err != nil) {
+		return nil, err
+	}
+	certBlock, _ := pem.Decode([]byte(certFileContent))
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if (err != nil) {
+		return nil, err
+	}
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
+
+	// Setup HTTPS client
+	caCertPool := x509.NewCertPool()
+	caCertPool.AddCert(trust)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{ keyPair },
+		RootCAs:      caCertPool,
+	}
+	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	client := &http.Client{Transport: transport}
+
+	return NewStsClientWithHttpClientForKombit(client, &keyPair, rsaPublicKey, issueUrl)
 }
 
 func NewStsClient(trust *x509.Certificate, certFile string, certKey string, issueUrl string) (*StsClient, error) {
@@ -51,6 +84,19 @@ func NewStsClient(trust *x509.Certificate, certFile string, certKey string, issu
 	client := &http.Client{Transport: transport}
 
 	return NewStsClientWithHttpClient(client, &keyPair, rsaPublicKey, issueUrl)
+}
+
+func NewStsClientWithHttpClientForKombit(httpClient *http.Client, keyPair *tls.Certificate, publicKey *rsa.PublicKey, issueUrl string) (*StsClient, error) {
+
+	keyStore := dsig.TLSCertKeyStore(*keyPair)
+	stsRequestFactory, err := NewStsRequestFactoryForKombit(keyStore, publicKey, issueUrl)
+	if (err != nil) {
+		return nil, err
+	}
+
+	stsClient := StsClient{ clientKeyPair: keyPair, stsRequestFactory: stsRequestFactory, client: httpClient, PublicKey: publicKey }
+
+	return &stsClient, nil
 }
 
 func NewStsClientWithHttpClient(httpClient *http.Client, keyPair *tls.Certificate, publicKey *rsa.PublicKey, issueUrl string) (*StsClient, error) {
