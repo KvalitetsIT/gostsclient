@@ -112,8 +112,6 @@ func (factory *StsRequestFactory) createRequest(appliesTo string, delegationInfo
 		return nil, err
 	}
 
-	fmt.Println("SOAP:", soapStr)
-
 	issueRequest, err := http.NewRequest("POST", factory.stsUrl, bytes.NewBuffer([]byte(soapStr)))
 	issueRequest.Header.Set("SOAPAction", "http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue")
 	issueRequest.Header.Set("Content-Type", "application/soap+xml; charset=utf-8" )
