@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"fmt"
+	"strings"
 	"time"
 	"net/http"
 	"encoding/base64"
@@ -166,14 +167,99 @@ type DelegationInfo struct {
 
 func createDelegationInfo(input []byte, tagName string) (*DelegationInfo, error) {
 
+	input = ensureSamlNamespace(input)
+
 	doc := etree.NewDocument()
 	err := doc.ReadFromBytes(input)
 	if (err != nil) {
 		return nil, err
 	}
 	inputElement := doc.Root()
+	if (inputElement == nil) {
+		return nil, fmt.Errorf("delegation input contains no root element")
+	}
+
+	// Assertionen er ikke nødvendigvis selvindeholdt (fx keycloak, hvor namespaces kan være erklæret på et
+	// omsluttende element). Tilføj manglende namespace-erklæringer på roden, så den kan stå alene.
+	addMissingNamespaces(inputElement, defaultDelegationNamespaces)
 
 	return &DelegationInfo{ DelegationElement: inputElement, DelegationTagName: tagName }, nil
+}
+
+const samlAssertionStart = "<saml:Assertion"
+const samlNamespaceDecl = `xmlns:saml="` + uri_saml2 + `"`
+
+// ensureSamlNamespace tilføjer xmlns:saml på rod-elementet, hvis input starter med <saml:Assertion
+// men ikke indeholder namespace-erklæringen (fx assertions fra nyere keycloak, som ikke er selvindeholdte)
+func ensureSamlNamespace(input []byte) []byte {
+	s := strings.TrimSpace(string(input))
+	if (!strings.HasPrefix(s, samlAssertionStart) || strings.Contains(s, samlNamespaceDecl)) {
+		return input
+	}
+	return []byte(samlAssertionStart + " " + samlNamespaceDecl + s[len(samlAssertionStart):])
+}
+
+// Kendte prefixer, der bruges, hvis en assertion anvender et prefix uden at erklære det
+var defaultDelegationNamespaces = map[string]string{
+	"saml":  uri_saml2,
+	"saml2": uri_saml2,
+	"ds":    uri_ds,
+	"dsig":  uri_ds,
+	"xsi":   "http://www.w3.org/2001/XMLSchema-instance",
+	"xs":    "http://www.w3.org/2001/XMLSchema",
+	"xsd":   "http://www.w3.org/2001/XMLSchema",
+	"ec":    "http://www.w3.org/2001/10/xml-exc-c14n#",
+	"xenc":  "http://www.w3.org/2001/04/xmlenc#",
+}
+
+// addMissingNamespaces finder prefixer, der bruges i root (elementer og attributter), men ikke er erklæret i scope,
+// og erklærer dem på root ud fra defaults. Eksisterende erklæringer røres ikke.
+func addMissingNamespaces(root *etree.Element, defaults map[string]string) {
+	missing := map[string]bool{}
+	collectUndeclaredPrefixes(root, map[string]bool{"xml": true, "xmlns": true}, missing)
+
+	for prefix := range missing {
+		if uri, ok := defaults[prefix]; ok {
+			root.CreateAttr("xmlns:"+prefix, uri)
+		}
+	}
+}
+
+func collectUndeclaredPrefixes(el *etree.Element, inScope map[string]bool, missing map[string]bool) {
+	// Udvid scope med erklæringer på dette element (kopi, så søskende ikke påvirkes)
+	scope := inScope
+	copied := false
+	for _, a := range el.Attr {
+		if (a.Space == "xmlns") {
+			if (!copied) {
+				copied = true
+				scope = make(map[string]bool, len(inScope)+1)
+				for k, v := range inScope {
+					scope[k] = v
+				}
+			}
+			scope[a.Key] = true
+		}
+	}
+
+	if (el.Space != "" && !scope[el.Space]) {
+		missing[el.Space] = true
+	}
+	for _, a := range el.Attr {
+		if (a.Space != "" && a.Space != "xmlns" && !scope[a.Space]) {
+			missing[a.Space] = true
+		}
+		// QName-værdier som xsi:type="xs:string" bruger også prefixer
+		if (a.Space == "xsi" && a.Key == "type") {
+			if i := strings.Index(a.Value, ":"); i > 0 && !scope[a.Value[:i]] {
+				missing[a.Value[:i]] = true
+			}
+		}
+	}
+
+	for _, child := range el.ChildElements() {
+		collectUndeclaredPrefixes(child, scope, missing)
+	}
 }
 
 func (di *DelegationInfo) CopyElement() *etree.Element {
